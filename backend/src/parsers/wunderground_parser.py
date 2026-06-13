@@ -32,6 +32,20 @@ def _url_appartiene_a_wunderground(url: str) -> bool:
     return urlparse(url).netloc in ("www.wunderground.com", "wunderground.com")
 
 
+def _e_pagina_articolo(url: str) -> bool:
+    """
+    Restituisce True solo se l'URL e' di un articolo/blog (non meteo/hourly/forecast).
+
+    Le pagine non-articolo (es. /hourly/..., /weather/..., /forecast/...) contengono
+    nel JSON SSR (app-root-state) anche teaser di articoli correlati con campi
+    'title'/'body' validi: se si applicasse l'estrazione articolo anche a queste
+    pagine si rischierebbe di estrarre il testo di un articolo non correlato
+    invece del contenuto meteo effettivo.
+    """
+    path = urlparse(url).path
+    return bool(re.match(r"^/(article|cat6|blog)/", path))
+
+
 def _crea_browser_config() -> BrowserConfig:
     """BrowserConfig con user-agent realistico e headers per eludere il bot-detection."""
     return BrowserConfig(
@@ -133,10 +147,60 @@ def _estrai_articolo_da_json(html_text: str) -> str:
 
 # ── Estrazione pagine meteo (non articolo) ─────────────────────────────────────
 
+# Frammenti di "boilerplate"/UI da scartare nell'estrazione generica
+# (rumore tipico delle pagine meteo: form di segnalazione stazione,
+# link di navigazione, controlli mappa, etc.)
+_BOILERPLATE_SUBSTR = [
+    "report this station", "report station", "bad data", "select the information",
+    "no pws", "reset map", "add pws", "showing stations", "showing", "previous day",
+    "next day", "current station", "personal weather station", "elevation :",
+    "find a station", "view calendar", "top video stories", "see more",
+    "star_rate", "date_range", "warning active statement", "( see more )",
+]
+
+
+def _e_boilerplate(testo: str) -> bool:
+    """Restituisce True se il testo e' un frammento di UI/boilerplate da scartare."""
+    basso = testo.lower()
+    return any(b in basso for b in _BOILERPLATE_SUBSTR)
+
+
+def _estrai_moduli_dati(radice: "BeautifulSoup", visti: set[str]) -> list[str]:
+    """
+    Estrae i blocchi '.data-module' (es. 'Additional Conditions', 'Astronomy')
+    nel formato 'Etichetta Valore' per riga, e rimuove i moduli processati
+    dall'albero per non riprocessarli nell'estrazione generica successiva.
+    """
+    parti: list[str] = []
+    for modulo in radice.select(".data-module"):
+        header = modulo.select_one(".module-header")
+        header_txt = header.get_text(" ", strip=True) if header else ""
+        if header_txt and header_txt not in visti:
+            parti.append(header_txt)
+            visti.add(header_txt)
+        for riga in modulo.select(".row"):
+            colonne = riga.find_all("div", recursive=False)
+            if len(colonne) >= 2:
+                etichetta = colonne[0].get_text(" ", strip=True)
+                valore = colonne[1].get_text(" ", strip=True)
+                linea = f"{etichetta} {valore}".strip()
+                if linea and linea not in visti:
+                    parti.append(linea)
+                    visti.add(linea)
+        modulo.decompose()
+    return parti
+
+
 def _estrai_pagina_meteo(html_text: str) -> str:
     """
-    Estrae il testo da pagine /weather/ di Weather Underground.
-    Raccoglie elementi foglia con testo sostanziale, evitando duplicazioni.
+    Estrae il testo da pagine meteo (hourly, forecast, weather, ...) di
+    Weather Underground.
+
+    Gestisce in modo specifico i moduli a blocchi (es. 'Additional Conditions',
+    'Astronomy'), che sul DOM sono righe etichetta/valore non catturate bene
+    dall'estrazione generica per elementi foglia, poi raccoglie il resto del
+    testo sostanziale evitando duplicazioni e rumore di interfaccia (form di
+    segnalazione stazione, controlli mappa, link di navigazione, ecc.).
     """
     soup = BeautifulSoup(html_text, "html.parser")
     for tag in soup(["script", "style", "nav", "footer", "header", "noscript", "ins", "aside"]):
@@ -156,11 +220,20 @@ def _estrai_pagina_meteo(html_text: str) -> str:
         parts.append(title_md)
 
     testi_visti: set[str] = set()
+
+    # Moduli a blocchi (Additional Conditions, Astronomy, ...)
+    parts.extend(_estrai_moduli_dati(radice, testi_visti))
+
+    # Estrazione generica per elementi foglia con testo sostanziale
     for el in radice.find_all(["p", "h1", "h2", "h3", "h4", "li", "span", "div"]):
         if el.find(["p", "h1", "h2", "h3", "h4", "li", "div"]):
             continue
         testo = re.sub(r"\s+", " ", el.get_text(separator=" ", strip=True)).strip()
-        if len(testo) < 20 or testo in testi_visti:
+        if len(testo) < 4 or testo in testi_visti:
+            continue
+        if _e_boilerplate(testo):
+            continue
+        if re.fullmatch(r"[\W_]+", testo):
             continue
         testi_visti.add(testo)
         parts.append(testo)
@@ -175,14 +248,17 @@ def _estrai_pagina_meteo(html_text: str) -> str:
 
 # ── Funzione di parsing unificata ──────────────────────────────────────────────
 
-def _estrai_testo(html_text: str) -> str:
+def _estrai_testo(html_text: str, url: str = "") -> str:
     """
     Prova prima l'estrazione articolo dal JSON SSR (app-root-state),
-    poi cade sul parser per pagine meteo standard.
+    ma solo per pagine articolo/blog (vedi _e_pagina_articolo);
+    per tutte le altre pagine (meteo, hourly, forecast, ...) usa
+    direttamente il parser per pagine meteo standard.
     """
-    testo = _estrai_articolo_da_json(html_text)
-    if testo and len(testo) > 300:
-        return testo
+    if _e_pagina_articolo(url):
+        testo = _estrai_articolo_da_json(html_text)
+        if testo and len(testo) > 300:
+            return testo
     return _estrai_pagina_meteo(html_text)
 
 
@@ -229,7 +305,7 @@ async def parse(url: str) -> dict:
         "domain": "www.wunderground.com",
         "title": titolo,
         "html_text": html_grezzo,
-        "parsed_text": _estrai_testo(html_grezzo),
+        "parsed_text": _estrai_testo(html_grezzo, url),
     }
 
 
@@ -264,7 +340,7 @@ async def parse_html(url: str, html_text: str) -> dict:
         "domain": "www.wunderground.com",
         "title": titolo,
         "html_text": html_text,
-        "parsed_text": _estrai_testo(html_text),
+        "parsed_text": _estrai_testo(html_text, url),
     }
 
 
