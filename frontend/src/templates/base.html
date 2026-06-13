@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>{% block title %}Web Parsing Pipeline{% endblock %}</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --rosso:    #7b1a2e;
+      --rosso-dk: #5a1020;
+      --bg:       #f4f6f9;
+      --card:     #ffffff;
+      --testo:    #1a1a2e;
+      --grigio:   #6b7280;
+      --bordo:    #e5e7eb;
+      --verde:    #16a34a;
+      --giallo:   #d97706;
+      --blu:      #1d4ed8;
+    }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--testo);
+      min-height: 100vh;
+    }
+
+    /* ---- Header ---- */
+    header {
+      background: var(--rosso);
+      color: #fff;
+      padding: .75rem 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: 0 2px 6px rgba(0,0,0,.3);
+      position: sticky; top: 0; z-index: 100;
+    }
+    header .brand { display: flex; align-items: center; gap: .75rem; }
+    header .brand h1 { font-size: 1.1rem; font-weight: 700; }
+    header .brand span { font-size: .8rem; opacity: .75; }
+
+    nav { display: flex; gap: .25rem; }
+    nav a {
+      color: rgba(255,255,255,.85);
+      text-decoration: none;
+      padding: .4rem .9rem;
+      border-radius: 6px;
+      font-size: .875rem;
+      font-weight: 500;
+      transition: background .15s;
+    }
+    nav a:hover, nav a.active { background: rgba(255,255,255,.2); color: #fff; }
+
+    /* ---- Layout ---- */
+    main { max-width: 1200px; margin: 2rem auto; padding: 0 1.5rem; }
+
+    /* ---- Card ---- */
+    .card {
+      background: var(--card);
+      border-radius: 10px;
+      padding: 1.5rem;
+      box-shadow: 0 1px 4px rgba(0,0,0,.08);
+      margin-bottom: 1.5rem;
+    }
+    .card h2 { font-size: 1.1rem; font-weight: 600; margin-bottom: 1rem; color: var(--rosso); }
+    .card h3 { font-size: .95rem; font-weight: 600; margin-bottom: .75rem; color: var(--testo); }
+
+    /* ---- Form elements ---- */
+    label { font-size: .875rem; font-weight: 500; display: block; margin-bottom: .35rem; }
+    input[type=text], input[type=url], select, textarea {
+      width: 100%;
+      padding: .55rem .75rem;
+      border: 1px solid var(--bordo);
+      border-radius: 6px;
+      font-size: .875rem;
+      font-family: inherit;
+      background: #fff;
+      transition: border-color .15s;
+    }
+    input:focus, select:focus, textarea:focus {
+      outline: none; border-color: var(--rosso);
+    }
+    textarea { resize: vertical; min-height: 120px; }
+
+    /* ---- Buttons ---- */
+    .btn {
+      display: inline-flex; align-items: center; gap: .4rem;
+      padding: .55rem 1.2rem;
+      border: none; border-radius: 6px; cursor: pointer;
+      font-size: .875rem; font-weight: 600; font-family: inherit;
+      transition: opacity .15s, transform .1s;
+    }
+    .btn:active { transform: scale(.97); }
+    .btn-primary { background: var(--rosso); color: #fff; }
+    .btn-primary:hover { opacity: .9; }
+    .btn-secondary { background: var(--bordo); color: var(--testo); }
+    .btn-secondary:hover { background: #d1d5db; }
+    .btn-danger { background: #dc2626; color: #fff; }
+    .btn-danger:hover { opacity: .9; }
+    .btn-sm { padding: .3rem .75rem; font-size: .8rem; }
+
+    /* ---- Badge ---- */
+    .badge {
+      display: inline-block; padding: .2rem .55rem;
+      border-radius: 20px; font-size: .75rem; font-weight: 600;
+    }
+    .badge-green  { background: #dcfce7; color: #15803d; }
+    .badge-yellow { background: #fef9c3; color: #92400e; }
+    .badge-red    { background: #fee2e2; color: #b91c1c; }
+    .badge-blue   { background: #dbeafe; color: #1e40af; }
+
+    /* ---- Status dot ---- */
+    .status-dot {
+      display: inline-block; width: 10px; height: 10px;
+      border-radius: 50%; margin-right: .4rem;
+    }
+    .dot-ok    { background: #22c55e; }
+    .dot-error { background: #ef4444; }
+
+    /* ---- Alert ---- */
+    .alert {
+      padding: .75rem 1rem; border-radius: 6px;
+      font-size: .875rem; margin-bottom: 1rem;
+    }
+    .alert-error   { background: #fee2e2; color: #b91c1c; border-left: 4px solid #ef4444; }
+    .alert-success { background: #dcfce7; color: #15803d; border-left: 4px solid #22c55e; }
+    .alert-info    { background: #dbeafe; color: #1e40af; border-left: 4px solid #3b82f6; }
+
+    /* ---- Code / pre ---- */
+    pre, code {
+      font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+      font-size: .82rem;
+    }
+    .code-block {
+      background: #1e1e2e;
+      color: #cdd6f4;
+      padding: 1rem;
+      border-radius: 8px;
+      overflow: auto;
+      max-height: 320px;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    /* ---- Grid ---- */
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+    .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
+    .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }
+    @media(max-width: 768px) {
+      .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
+    }
+
+    /* ---- Stat box ---- */
+    .stat-box {
+      background: var(--card);
+      border-radius: 10px;
+      padding: 1.2rem;
+      box-shadow: 0 1px 4px rgba(0,0,0,.08);
+      text-align: center;
+    }
+    .stat-box .val {
+      font-size: 2rem; font-weight: 700; color: var(--rosso);
+    }
+    .stat-box .lbl { font-size: .8rem; color: var(--grigio); margin-top: .25rem; }
+
+    /* ---- Table ---- */
+    table { width: 100%; border-collapse: collapse; font-size: .875rem; }
+    th {
+      text-align: left; padding: .6rem .75rem;
+      background: #f9fafb; border-bottom: 2px solid var(--bordo);
+      font-weight: 600; color: var(--grigio);
+      font-size: .8rem; text-transform: uppercase; letter-spacing: .03em;
+    }
+    td { padding: .6rem .75rem; border-bottom: 1px solid var(--bordo); vertical-align: middle; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #f9fafb; }
+
+    /* ---- Loading spinner ---- */
+    .spinner {
+      display: inline-block; width: 18px; height: 18px;
+      border: 3px solid rgba(255,255,255,.4);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin .6s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ---- Tabs ---- */
+    .tabs { display: flex; gap: 0; border-bottom: 2px solid var(--bordo); margin-bottom: 1.25rem; }
+    .tab-btn {
+      padding: .6rem 1.25rem; background: none; border: none; cursor: pointer;
+      font-size: .875rem; font-weight: 500; color: var(--grigio);
+      border-bottom: 2px solid transparent; margin-bottom: -2px;
+      font-family: inherit; transition: color .15s;
+    }
+    .tab-btn.active { color: var(--rosso); border-bottom-color: var(--rosso); }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    /* ---- Metric card ---- */
+    .metric-row { display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem; }
+    .metric-card {
+      flex: 1; min-width: 100px;
+      background: #f9fafb; border-radius: 8px; padding: .75rem 1rem; text-align: center;
+    }
+    .metric-card .m-val { font-size: 1.5rem; font-weight: 700; color: var(--rosso); }
+    .metric-card .m-lbl { font-size: .75rem; color: var(--grigio); }
+
+    /* ---- Toggle switch ---- */
+    .toggle-group { display: flex; gap: 0; border: 1px solid var(--bordo); border-radius: 6px; overflow: hidden; }
+    .toggle-group label {
+      flex: 1; text-align: center; padding: .45rem .9rem;
+      cursor: pointer; font-size: .825rem; font-weight: 500;
+      background: #fff; transition: background .15s, color .15s;
+      margin: 0;
+    }
+    .toggle-group input[type=radio] { display: none; }
+    .toggle-group input[type=radio]:checked + label { background: var(--rosso); color: #fff; }
+
+    /* ---- Page header ---- */
+    .page-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 1.5rem;
+    }
+    .page-header h2 { font-size: 1.4rem; font-weight: 700; }
+    .page-header p { color: var(--grigio); font-size: .875rem; margin-top: .2rem; }
+  </style>
+  {% block extra_head %}{% endblock %}
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <h1>🔍 Web Parsing Pipeline</h1>
+      <span>Sapienza NLP &mdash; Lab Ingegneria Informatica</span>
+    </div>
+    <nav>
+      <a href="/" class="{% if active_page == 'home' %}active{% endif %}">🏠 Home</a>
+      <a href="/parser" class="{% if active_page == 'parser' %}active{% endif %}">⚙️ Parser & Eval</a>
+      <a href="/gold-standard" class="{% if active_page == 'gs' %}active{% endif %}">📋 Gold Standard</a>
+      <a href="/stats" class="{% if active_page == 'stats' %}active{% endif %}">📊 Stats</a>
+    </nav>
+  </header>
+
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+
+  {% block extra_scripts %}{% endblock %}
+</body>
+</html>

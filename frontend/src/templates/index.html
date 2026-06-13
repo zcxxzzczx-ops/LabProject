@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}Home — Web Parsing Pipeline{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h2>Web Parsing Pipeline</h2>
+    <p>Pipeline end-to-end per acquisizione e analisi di documenti web — Sapienza NLP</p>
+  </div>
+</div>
+
+<div class="grid-3" style="margin-bottom:1.5rem;">
+  <a href="/parser" style="text-decoration:none;">
+    <div class="stat-box" style="cursor:pointer;">
+      <div style="font-size:2rem;">⚙️</div>
+      <div class="val" style="font-size:1.1rem;margin-top:.5rem;">Parser & Eval</div>
+      <div class="lbl">Testa un parser su un URL</div>
+    </div>
+  </a>
+  <a href="/gold-standard" style="text-decoration:none;">
+    <div class="stat-box" style="cursor:pointer;">
+      <div style="font-size:2rem;">📋</div>
+      <div class="val" style="font-size:1.1rem;margin-top:.5rem;">Gold Standard</div>
+      <div class="lbl">Costruisci e gestisci il GS</div>
+    </div>
+  </a>
+  <a href="/stats" style="text-decoration:none;">
+    <div class="stat-box" style="cursor:pointer;">
+      <div style="font-size:2rem;">📊</div>
+      <div class="val" style="font-size:1.1rem;margin-top:.5rem;">Stats</div>
+      <div class="lbl">Statistiche aggregate del sistema</div>
+    </div>
+  </a>
+</div>
+
+<div class="grid-2">
+  <div class="card">
+    <h2>🟢 Stato del Sistema</h2>
+    <table>
+      <thead><tr><th>Componente</th><th>Stato</th></tr></thead>
+      <tbody>
+        {% for name, val in [("Backend", status.backend), ("Database", status.database), ("Ollama", status.ollama)] %}
+        <tr>
+          <td><strong>{{ name }}</strong></td>
+          <td>
+            <span class="status-dot {{ 'dot-ok' if val == 'ok' else 'dot-error' }}"></span>
+            <span class="badge {{ 'badge-green' if val == 'ok' else 'badge-red' }}">{{ val }}</span>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>🌐 Domini Supportati</h2>
+    {% if domains %}
+    <div class="pills" style="display:flex;flex-wrap:wrap;gap:.5rem;">
+      {% for d in domains %}
+      <span class="badge badge-blue">{{ d }}</span>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p style="color:var(--grigio);font-size:.875rem;">Nessun dominio disponibile.</p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

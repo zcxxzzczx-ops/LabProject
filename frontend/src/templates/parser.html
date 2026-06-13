@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+{% block title %}Parser & Evaluation{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h2>⚙️ Parser & Evaluation</h2>
+    <p>Testa il parser su un URL e confronta il risultato con il Gold Standard</p>
+  </div>
+</div>
+
+<div class="card">
+  <h2>URL di Test</h2>
+  <form method="post" action="/parser">
+    <div style="display:flex;gap:1rem;align-items:flex-end;flex-wrap:wrap;margin-bottom:1rem;">
+      <div style="flex:1;min-width:300px;">
+        <label>Inserisci URL</label>
+        <input type="text" name="url" placeholder="https://en.wikipedia.org/wiki/Rome"
+               value="{{ submitted_url or '' }}" required/>
+      </div>
+      <div>
+        <label>Modalità</label>
+        <div class="toggle-group">
+          <input type="radio" name="mode" id="mode-live" value="live"
+                 {{ 'checked' if not mode or mode == 'live' else '' }}>
+          <label for="mode-live">Live</label>
+          <input type="radio" name="mode" id="mode-local" value="local"
+                 {{ 'checked' if mode == 'local' else '' }}>
+          <label for="mode-local">Local</label>
+        </div>
+        <div style="font-size:.75rem;color:var(--grigio);margin-top:.3rem;">
+          Live = scarica ora &nbsp;|&nbsp; Local = usa HTML nel DB
+        </div>
+      </div>
+      <button class="btn btn-primary" type="submit">Esegui Parsing</button>
+    </div>
+
+    {% if gs_urls %}
+    <div>
+      <label>Oppure seleziona un URL dal Gold Standard</label>
+      <div style="display:flex;gap:.75rem;flex-wrap:wrap;">
+        <select name="url" style="flex:1;" onchange="this.form.submit()">
+          <option value="" disabled selected>— Scegli un URL dal GS —</option>
+          {% for domain, urls in gs_urls.items() %}
+          <optgroup label="{{ domain }}">
+            {% for u in urls %}
+            <option value="{{ u }}" {{ 'selected' if submitted_url == u else '' }}>{{ u }}</option>
+            {% endfor %}
+          </optgroup>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+    {% endif %}
+  </form>
+</div>
+
+{% if parse_result %}
+
+  {% if parse_result.error is defined %}
+  <div class="alert alert-error">⚠️ <strong>Errore:</strong> {{ parse_result.error }}</div>
+  {% else %}
+
+  <div class="card">
+    <h2>📄 Risultato Parsing</h2>
+    <div style="font-size:.82rem;color:var(--grigio);margin-bottom:1rem;">
+      <strong>URL:</strong> {{ parse_result.url }} &nbsp;|&nbsp;
+      <strong>Dominio:</strong> {{ parse_result.domain }} &nbsp;|&nbsp;
+      <strong>Titolo:</strong> {{ parse_result.title }}
+    </div>
+    <div class="grid-2">
+      <div>
+        <h3 style="margin-bottom:.5rem;font-size:.8rem;text-transform:uppercase;color:var(--grigio);">HTML Grezzo (Input Parser)</h3>
+        <pre class="code-block">{{ parse_result.html_text[:3000] }}{% if parse_result.html_text|length > 3000 %}
+[... troncato ...]{% endif %}</pre>
+      </div>
+      <div>
+        <h3 style="margin-bottom:.5rem;font-size:.8rem;text-transform:uppercase;color:var(--grigio);">Testo Parsato (Markdown)</h3>
+        <pre class="code-block">{{ parse_result.parsed_text[:3000] }}{% if parse_result.parsed_text|length > 3000 %}
+[... troncato ...]{% endif %}</pre>
+      </div>
+    </div>
+  </div>
+
+  {% if gs_result %}
+  <div class="card">
+    <h2>📋 Confronto con Gold Standard</h2>
+
+    {% if eval_result and eval_result.token_level_eval is defined %}
+    <div class="metric-row">
+      <div class="metric-card">
+        <div class="m-val">{{ "%.2f"|format(eval_result.token_level_eval.precision) }}</div>
+        <div class="m-lbl">Precision</div>
+      </div>
+      <div class="metric-card">
+        <div class="m-val">{{ "%.2f"|format(eval_result.token_level_eval.recall) }}</div>
+        <div class="m-lbl">Recall</div>
+      </div>
+      <div class="metric-card">
+        <div class="m-val">{{ "%.2f"|format(eval_result.token_level_eval.f1) }}</div>
+        <div class="m-lbl">F1</div>
+      </div>
+      {% if eval_result.char_overlap_eval %}
+      <div class="metric-card">
+        <div class="m-val">{{ "%.2f"|format(eval_result.char_overlap_eval.jaccard_similarity) }}</div>
+        <div class="m-lbl">Jaccard</div>
+      </div>
+      {% endif %}
+      {% if judge_result and judge_result.judge_score is defined %}
+      <div class="metric-card">
+        <div class="m-val">{{ judge_result.judge_score }}/5</div>
+        <div class="m-lbl">LLM Judge</div>
+      </div>
+      {% endif %}
+    </div>
+
+    {% if judge_result and judge_result.judge_feedback %}
+    <div class="alert alert-info" style="margin-bottom:1rem;">
+      <strong>Feedback LLM ({{ judge_result.model_name }}):</strong> {{ judge_result.judge_feedback }}
+    </div>
+    {% endif %}
+    {% endif %}
+
+    <div class="grid-2">
+      <div>
+        <h3 style="margin-bottom:.5rem;font-size:.8rem;text-transform:uppercase;color:var(--grigio);">Output Parser</h3>
+        <pre class="code-block">{{ parse_result.parsed_text[:2500] }}</pre>
+      </div>
+      <div>
+        <h3 style="margin-bottom:.5rem;font-size:.8rem;text-transform:uppercase;color:var(--grigio);">Gold Standard Text</h3>
+        <pre class="code-block">{{ gs_result.gold_text[:2500] }}</pre>
+      </div>
+    </div>
+  </div>
+
+  {% elif submitted_url %}
+  <div class="alert alert-info">ℹ️ Nessun Gold Standard trovato per questo URL — le metriche di valutazione non sono disponibili.</div>
+  {% endif %}
+
+  {% endif %}
+{% endif %}
+{% endblock %}

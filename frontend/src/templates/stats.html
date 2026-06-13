@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+{% block title %}Stats — Web Parsing Pipeline{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h2>📊 Statistiche del Sistema</h2>
+    <p>Panoramica aggregata di tutti i domini — dati pre-calcolati dal database</p>
+  </div>
+</div>
+
+{% if db_stats.error is defined %}
+<div class="alert alert-error">⚠️ Errore nel recupero delle statistiche: {{ db_stats.error }}</div>
+{% else %}
+
+{% set wr = db_stats.web_resources or {} %}
+{% set gs = db_stats.gold_standard or {} %}
+{% set avg_eval = db_stats.avg_eval or {} %}
+{% set avg_judge = db_stats.avg_eval_judge or {} %}
+
+<!-- Contatori globali -->
+{% set tot_wr = wr.values() | list %}
+{% set tot_gs = gs.values() | list %}
+<div class="grid-4" style="margin-bottom:1.5rem;">
+  <div class="stat-box">
+    <div class="val">{{ domains | length }}</div>
+    <div class="lbl">Domini Supportati</div>
+  </div>
+  <div class="stat-box">
+    <div class="val">{{ tot_wr | sum }}</div>
+    <div class="lbl">Web Resources nel DB</div>
+  </div>
+  <div class="stat-box">
+    <div class="val">{{ tot_gs | sum }}</div>
+    <div class="lbl">Entry Gold Standard</div>
+  </div>
+  <div class="stat-box">
+    <div class="val">
+      {% set f1_vals = [] %}
+      {% for d, ev in avg_eval.items() %}
+        {% if ev.token_level_eval is defined %}
+          {% set _ = f1_vals.append(ev.token_level_eval.f1) %}
+        {% endif %}
+      {% endfor %}
+      {{ "%.2f"|format(f1_vals | sum / f1_vals | length) if f1_vals else "—" }}
+    </div>
+    <div class="lbl">F1 Medio Globale</div>
+  </div>
+</div>
+
+<!-- Tabella per dominio -->
+<div class="card">
+  <h2>📋 Dettaglio per Dominio</h2>
+  {% if domains %}
+  <table>
+    <thead>
+      <tr>
+        <th>Dominio</th>
+        <th>Web Resources</th>
+        <th>Gold Standard</th>
+        <th>Precision</th>
+        <th>Recall</th>
+        <th>F1</th>
+        <th>Jaccard</th>
+        <th>Judge Score</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for d in domains %}
+      {% set ev = avg_eval.get(d, {}) %}
+      {% set tl = ev.token_level_eval if ev.token_level_eval is defined else {} %}
+      {% set jd = avg_judge.get(d, {}) %}
+      <tr>
+        <td><span class="badge badge-blue">{{ d }}</span></td>
+        <td>{{ wr.get(d, 0) }}</td>
+        <td>{{ gs.get(d, 0) }}</td>
+        <td>
+          {% if tl.precision is defined %}
+            {% set p = tl.precision %}
+            <span class="badge {{ 'badge-green' if p > 0.8 else ('badge-yellow' if p > 0.6 else 'badge-red') }}">
+              {{ "%.2f"|format(p) }}
+            </span>
+          {% else %}—{% endif %}
+        </td>
+        <td>
+          {% if tl.recall is defined %}
+            {% set r = tl.recall %}
+            <span class="badge {{ 'badge-green' if r > 0.8 else ('badge-yellow' if r > 0.6 else 'badge-red') }}">
+              {{ "%.2f"|format(r) }}
+            </span>
+          {% else %}—{% endif %}
+        </td>
+        <td>
+          {% if tl.f1 is defined %}
+            {% set f = tl.f1 %}
+            <span class="badge {{ 'badge-green' if f > 0.8 else ('badge-yellow' if f > 0.6 else 'badge-red') }}">
+              {{ "%.2f"|format(f) }}
+            </span>
+          {% else %}—{% endif %}
+        </td>
+        <td>
+          {% if ev.char_overlap_eval is defined and ev.char_overlap_eval.jaccard_similarity is defined %}
+            {{ "%.2f"|format(ev.char_overlap_eval.jaccard_similarity) }}
+          {% else %}—{% endif %}
+        </td>
+        <td>
+          {% if jd.judge_score is defined and jd.judge_score %}
+            {% set js = jd.judge_score %}
+            <span class="badge {{ 'badge-green' if js >= 4 else ('badge-yellow' if js >= 3 else 'badge-red') }}">
+              {{ "%.1f"|format(js) }}/5
+            </span>
+          {% else %}—{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p style="color:var(--grigio);">Nessun dominio disponibile.</p>
+  {% endif %}
+</div>
+
+<!-- Legenda badge -->
+<div class="card">
+  <h2>ℹ️ Legenda Metriche</h2>
+  <div style="display:flex;gap:1.5rem;flex-wrap:wrap;font-size:.875rem;">
+    <div><span class="badge badge-green">verde</span> &nbsp;F1 &gt; 0.80 — Buono</div>
+    <div><span class="badge badge-yellow">giallo</span> &nbsp;F1 0.60–0.80 — Medio</div>
+    <div><span class="badge badge-red">rosso</span> &nbsp;F1 &lt; 0.60 — Scarso</div>
+    <div style="color:var(--grigio);">— = nessuna valutazione calcolata (esegui /full_gs_eval)</div>
+  </div>
+</div>
+
+{% endif %}
+{% endblock %}
