@@ -238,8 +238,29 @@ def _estrai_pagina_meteo(html_text: str) -> str:
         testi_visti.add(testo)
         parts.append(testo)
 
-    if len(parts) > 1:
-        return re.sub(r"\n{3,}", "\n\n", "\n\n".join(parts)).strip()
+    # Deduplicazione per sottostringa: scarta i frammenti che sono già
+    # contenuti (come sottostringa normalizzata) in un frammento più lungo.
+    # Questo elimina la cascata tipica dei componenti Angular dove padre e
+    # figli emettono entrambi varianti dello stesso testo (es. "Today Sat 06/13
+    # High 69 ° F" → "Today" → "Sat 06/13" → "69 ° F").
+    def _normalizza(s: str) -> str:
+        return re.sub(r"\s+", " ", s.lower()).strip()
+
+    parts_sorted = sorted(parts, key=lambda s: len(s), reverse=True)
+    accettati: list[str] = []
+    accettati_norm: list[str] = []
+    for p in parts_sorted:
+        pn = _normalizza(p)
+        if any(pn in an for an in accettati_norm):
+            continue
+        accettati.append(p)
+        accettati_norm.append(pn)
+    # Ripristina l'ordine originale di apparizione
+    ordine = {id(p): i for i, p in enumerate(parts)}
+    accettati.sort(key=lambda p: ordine.get(id(p), 0))
+
+    if len(accettati) > 1:
+        return re.sub(r"\n{3,}", "\n\n", "\n\n".join(accettati)).strip()
 
     # Fallback grezzo
     testo = re.sub(r"\s+", " ", radice.get_text(separator=" ", strip=True)).strip()
